@@ -1,97 +1,26 @@
-```gradle
 plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
 }
 
 android {
-    namespace 'com.example.myapp'
+    namespace 'com.example.app'
     compileSdk 34
 
     defaultConfig {
-        applicationId "com.example.myapp"
-        minSdk 24
+        applicationId "com.example.app"
+        minSdk 21
         targetSdk 34
         versionCode 1
         versionName "1.0"
 
-        ndk {
-            abiFilters 'armeabi-v7a', 'arm64-v8a'
-        }
-    }
-
-    /*
-     * =========================================================
-     * Release 签名
-     * =========================================================
-     *
-     * GitHub Actions 会把 Secret 解码到：
-     *
-     * app/release-key.jks
-     *
-     * 如果没有配置签名环境变量，则不启用 release 签名，
-     * 避免本地开发时因为缺少 JKS 而无法编译。
-     */
-    signingConfigs {
-        release {
-            def keystorePath = System.getenv("KEYSTORE_PATH")
-            def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-            def keyAliasValue = System.getenv("KEY_ALIAS")
-            def keyPasswordValue = System.getenv("KEY_PASSWORD")
-
-            if (keystorePath != null &&
-                !keystorePath.trim().isEmpty() &&
-                keystorePassword != null &&
-                !keystorePassword.trim().isEmpty() &&
-                keyAliasValue != null &&
-                !keyAliasValue.trim().isEmpty() &&
-                keyPasswordValue != null &&
-                !keyPasswordValue.trim().isEmpty()) {
-
-                /*
-                 * GitHub Actions 当前工作目录是项目根目录，
-                 * release-key.jks 位于 app/release-key.jks。
-                 */
-                storeFile file("release-key.jks")
-                storePassword keystorePassword
-                keyAlias keyAliasValue
-                keyPassword keyPasswordValue
-            }
-        }
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
-            minifyEnabled true
-            shrinkResources true
-
-            proguardFiles \
-                getDefaultProguardFile('proguard-android-optimize.txt'),
-                'proguard-rules.pro'
-
-            /*
-             * 只有存在完整签名环境时才使用 Release 签名。
-             */
-            def keystorePath = System.getenv("KEYSTORE_PATH")
-            def keystorePassword = System.getenv("KEYSTORE_PASSWORD")
-            def keyAliasValue = System.getenv("KEY_ALIAS")
-            def keyPasswordValue = System.getenv("KEY_PASSWORD")
-
-            if (keystorePath != null &&
-                !keystorePath.trim().isEmpty() &&
-                keystorePassword != null &&
-                !keystorePassword.trim().isEmpty() &&
-                keyAliasValue != null &&
-                !keyAliasValue.trim().isEmpty() &&
-                keyPasswordValue != null &&
-                !keyPasswordValue.trim().isEmpty()) {
-
-                signingConfig signingConfigs.release
-            }
-        }
-
-        debug {
             minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 
@@ -103,52 +32,15 @@ android {
     kotlinOptions {
         jvmTarget = '17'
     }
-
-    sourceSets {
-        main {
-            assets.srcDirs = ['src/main/assets']
-        }
-    }
-
-    packagingOptions {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-
-        resources {
-            excludes += [
-                'META-INF/DEPENDENCIES',
-                'META-INF/LICENSE',
-                'META-INF/LICENSE.txt',
-                'META-INF/NOTICE',
-                'META-INF/NOTICE.txt'
-            ]
-        }
-    }
 }
 
 dependencies {
-
-    // =========================================================
-    // 讯飞 SDK
-    // =========================================================
-
-    implementation files('libs/Codec.aar')
-    implementation files('libs/SparkChain.aar')
-
-    // =========================================================
-    // Android 基础依赖
-    // =========================================================
-
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
 
-    // =========================================================
-    // Gson
-    // SparkChain 使用 @SerializedName
-    // =========================================================
-
-    implementation 'com.google.code.gson:gson:2.10.1'
+    testImplementation 'junit:junit:4.13.2'
+    androidTestImplementation 'androidx.test.ext:junit:1.1.5'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
 }
-```
