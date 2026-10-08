@@ -16,3 +16,8 @@
 -keep public class * extends android.app.Service
 -keep public class * extends android.content.BroadcastReceiver
 -keep public class * extends android.content.ContentProvider
+
+# Gson used by iFlytek SparkChain
+-keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations
+-keep class com.google.gson.** { *; }
+-keep @interface com.google.gson.annotations.** { *; }
