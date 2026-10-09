@@ -16,8 +16,26 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // ================= 新增：签名配置 =================
+    signingConfigs {
+        release {
+            // 这里的 "release-key.jks" 要和 YAML 中还原证书的路径一致
+            // YAML 里写的是 > app/release-key.jks，而 build.gradle 在 app 目录下，所以直接写文件名即可
+            storeFile file("release-key.jks")
+            // 对应 GitHub Secrets 传进来的环境变量
+            storePassword System.getenv("KEYSTORE_PASSWORD")
+            keyAlias System.getenv("KEY_ALIAS")
+            keyPassword System.getenv("KEY_PASSWORD")
+        }
+    }
+    // ==================================================
+
     buildTypes {
         release {
+            // ================= 新增：应用签名配置 =================
+            signingConfig signingConfigs.release
+            // ======================================================
+
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
