@@ -1,4 +1,4 @@
-package com.example.app; // ⚠️ 替换为你实际的包名
+package com.example.app; // ⚠️ 如果你的包名不是 com.example.app，请改成你自己的
 
 import android.os.Bundle;
 import android.os.Process;
@@ -8,26 +8,26 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 
+// 👇 关键点：必须要有 extends AppCompatActivity
 public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        // 这里必须和你 res/layout 文件夹里的布局文件名一致（默认是 activity_main）
         setContentView(R.layout.activity_main);
 
-        // ============ 崩溃日志捕获代码（开始） ============
+        // ============ 崩溃日志捕获代码 ============
         Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread thread, Throwable throwable) {
                 try {
-                    // 1. 将报错堆栈转换成字符串
+                    // 1. 获取详细的错误堆栈
                     StringWriter sw = new StringWriter();
                     PrintWriter pw = new PrintWriter(sw);
                     throwable.printStackTrace(pw);
                     String errorLog = sw.toString();
 
-                    // 2. 把日志写入手机应用私有目录 /Android/data/包名/files/crash_log.txt
+                    // 2. 把错误日志写入手机文件
                     File crashFile = new File(getExternalFilesDir(null), "crash_log.txt");
                     FileWriter writer = new FileWriter(crashFile);
                     writer.write(errorLog);
@@ -36,12 +36,11 @@ public class MainActivity extends AppCompatActivity {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
-
-                // 3. 记录完毕后强制结束 App
+                // 3. 记录完毕后结束 App
                 Process.killProcess(Process.myPid());
                 System.exit(1);
             }
         });
-        // ============ 崩溃日志捕获代码（结束） ============
+        // ==========================================
     }
 }
