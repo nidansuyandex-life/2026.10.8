@@ -1,233 +1,47 @@
-package com.example.myapp
+package com.example.app; // ⚠️ 替换为你实际的包名
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
-import java.util.Locale
+import android.os.Bundle;
+import android.os.Process;
+import androidx.appcompat.app.AppCompatActivity;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 
-class MainActivity : AppCompatActivity() {
+public class MainActivity extends AppCompatActivity {
 
-    private lateinit var webView: WebView
-    private var speechRecognizer: SpeechRecognizer? = null
-    private var speechIntent: Intent? = null
-    private var pendingStartAfterPermission = false
-    private var isSpeechListening = false
-    private val requestAudioCode = 1001
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // 这里必须和你 res/layout 文件夹里的布局文件名一致（默认是 activity_main）
+        setContentView(R.layout.activity_main);
 
-    @SuppressLint("SetJavaScriptEnabled")
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+        // ============ 崩溃日志捕获代码（开始） ============
+        Thread.setDefaultUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread thread, Throwable throwable) {
+                try {
+                    // 1. 将报错堆栈转换成字符串
+                    StringWriter sw = new StringWriter();
+                    PrintWriter pw = new PrintWriter(sw);
+                    throwable.printStackTrace(pw);
+                    String errorLog = sw.toString();
 
-        webView = WebView(this)
-        setContentView(webView)
-
-        val settings = webView.settings
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.allowFileAccess = true
-        settings.allowContentAccess = true
-        settings.javaScriptCanOpenWindowsAutomatically = true
-        settings.mediaPlaybackRequiresUserGesture = false
-        settings.cacheMode = WebSettings.LOAD_DEFAULT
-
-        webView.webViewClient = WebViewClient()
-        webView.webChromeClient = WebChromeClient()
-
-        // 给网页提供 Android 原生语音识别能力。
-        webView.addJavascriptInterface(AndroidSpeechBridge(), "AndroidSpeech")
-
-        // 原项目这里错误地加载了不存在的 index.js，导致 App 打开后白屏。
-        webView.loadUrl("file:///android_asset/index.html")
-
-        initSpeechRecognizer()
-    }
-
-    private fun initSpeechRecognizer() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
-
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
-        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) {
-                isSpeechListening = true
-                callJs("window.onNativeSpeechState && window.onNativeSpeechState('listening')")
-            }
-
-            override fun onBeginningOfSpeech() {
-                callJs("window.onNativeSpeechState && window.onNativeSpeechState('speaking')")
-            }
-
-            override fun onRmsChanged(rmsdB: Float) = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-
-            override fun onEndOfSpeech() {
-                isSpeechListening = false
-                callJs("window.onNativeSpeechState && window.onNativeSpeechState('processing')")
-            }
-
-            override fun onError(error: Int) {
-                isSpeechListening = false
-                callJs(
-                    "window.onNativeSpeechError && window.onNativeSpeechError(" +
-                        JSONObjectEscaper.quote(nativeSpeechError(error)) + ")"
-                )
-            }
-
-            override fun onResults(results: Bundle?) {
-                isSpeechListening = false
-                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                val text = matches?.firstOrNull()?.trim().orEmpty()
-                if (text.isEmpty()) {
-                    callJs("window.onNativeSpeechError && window.onNativeSpeechError('没有听清，请再说一次')")
-                } else {
-                    callJs(
-                        "window.onNativeSpeechResult && window.onNativeSpeechResult(" +
-                            JSONObjectEscaper.quote(text) + ")"
-                    )
+                    // 2. 把日志写入手机应用私有目录 /Android/data/包名/files/crash_log.txt
+                    File crashFile = new File(getExternalFilesDir(null), "crash_log.txt");
+                    FileWriter writer = new FileWriter(crashFile);
+                    writer.write(errorLog);
+                    writer.flush();
+                    writer.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
                 }
+
+                // 3. 记录完毕后强制结束 App
+                Process.killProcess(Process.myPid());
+                System.exit(1);
             }
-
-            override fun onPartialResults(partialResults: Bundle?) = Unit
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
-        })
-
-        speechIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(
-                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-            )
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.SIMPLIFIED_CHINESE.toLanguageTag())
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "zh-CN")
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-        }
-    }
-
-    private fun startNativeSpeech() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            callJs("window.onNativeSpeechError && window.onNativeSpeechError('设备没有可用的语音识别服务')")
-            return
-        }
-
-        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            pendingStartAfterPermission = true
-            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), requestAudioCode)
-            return
-        }
-
-        if (speechRecognizer == null || speechIntent == null) initSpeechRecognizer()
-        try {
-            speechRecognizer?.cancel()
-            speechRecognizer?.startListening(speechIntent)
-            callJs("window.onNativeSpeechState && window.onNativeSpeechState('starting')")
-        } catch (e: Exception) {
-            callJs(
-                "window.onNativeSpeechError && window.onNativeSpeechError(" +
-                    JSONObjectEscaper.quote(e.message ?: "无法启动语音识别") + ")"
-            )
-        }
-    }
-
-    private fun stopNativeSpeech() {
-        try {
-            speechRecognizer?.stopListening()
-        } catch (_: Exception) {
-        }
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode != requestAudioCode) return
-
-        if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            callJs("window.onNativeSpeechPermission && window.onNativeSpeechPermission(true)")
-            if (pendingStartAfterPermission) {
-                pendingStartAfterPermission = false
-                startNativeSpeech()
-            }
-        } else {
-            pendingStartAfterPermission = false
-            callJs("window.onNativeSpeechPermission && window.onNativeSpeechPermission(false)")
-            callJs("window.onNativeSpeechError && window.onNativeSpeechError('麦克风权限未开启，请在系统设置中允许“日常”使用麦克风')")
-        }
-    }
-
-    private fun callJs(script: String) {
-        runOnUiThread {
-            if (::webView.isInitialized) {
-                webView.evaluateJavascript(script, null)
-            }
-        }
-    }
-
-    override fun onDestroy() {
-        try {
-            speechRecognizer?.destroy()
-        } catch (_: Exception) {
-        }
-        speechRecognizer = null
-        try {
-            webView.removeJavascriptInterface("AndroidSpeech")
-            webView.destroy()
-        } catch (_: Exception) {
-        }
-        super.onDestroy()
-    }
-
-    inner class AndroidSpeechBridge {
-        @JavascriptInterface
-        fun start() {
-            runOnUiThread { startNativeSpeech() }
-        }
-
-        @JavascriptInterface
-        fun stop() {
-            runOnUiThread { stopNativeSpeech() }
-        }
-
-        @JavascriptInterface
-        fun isAvailable(): Boolean {
-            return SpeechRecognizer.isRecognitionAvailable(this@MainActivity)
-        }
-    }
-
-    private fun nativeSpeechError(error: Int): String {
-        return when (error) {
-            SpeechRecognizer.ERROR_AUDIO -> "录音失败，请检查麦克风"
-            SpeechRecognizer.ERROR_CLIENT -> "语音识别客户端错误，请重试"
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "没有麦克风权限"
-            SpeechRecognizer.ERROR_NETWORK -> "网络错误，请检查网络"
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "网络超时，请重试"
-            SpeechRecognizer.ERROR_NO_MATCH -> "没有听清，请再说一次"
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "语音识别服务正忙，请稍后再试"
-            SpeechRecognizer.ERROR_SERVER -> "语音识别服务器错误"
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "没有检测到说话，请点击麦克风后立即说话"
-            else -> "语音识别失败（$error）"
-        }
-    }
-
-    private object JSONObjectEscaper {
-        fun quote(value: String): String {
-            return "\"" + value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\r", "\\r")
-                .replace("\n", "\\n")
-                .replace("\t", "\\t") + "\""
-        }
+        });
+        // ============ 崩溃日志捕获代码（结束） ============
     }
 }
